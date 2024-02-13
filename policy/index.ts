@@ -3,11 +3,11 @@ import { PolicyPack, validateResourceOfType } from "@pulumi/policy";
 const awaitSpawn = require("await-spawn");
 
 
-new PolicyPack("aws-typescript", {
+new PolicyPack("demo-snyk", {
     policies: [{
         enforcementLevel: "mandatory",
-        name: "try-snyk",
-        description: "Try to scan a Docker image.",
+        name: "snyk-docker-image-scan",
+        description: "Scans Docker Images with Snyk",
         validateResource: validateResourceOfType(docker.Image, async (image, args, reportViolation) => {
             const commandArgs = [
                 "container",
