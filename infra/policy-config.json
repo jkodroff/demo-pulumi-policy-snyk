@@ -1,0 +1,5 @@
+{
+  "snyk-container-scan": {
+    "dockerfileScanning": true
+  }
+}
