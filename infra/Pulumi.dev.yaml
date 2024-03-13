@@ -1,0 +1,3 @@
+config:
+  demo-pulumi-policy-snyk:snykToken:
+    secure: AAABAIDHZwJAPU2ApGhzh9pdxT9YmXOnGKM0kL8jRoCEjBiwV8jbHZr0tV6pWN5yAw==
