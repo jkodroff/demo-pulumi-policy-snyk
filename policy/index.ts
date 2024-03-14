@@ -1,11 +1,165 @@
 import * as docker from "@pulumi/docker";
-import { PolicyPack, validateResourceOfType } from "@pulumi/policy";
+import { PolicyPack, PolicyResource, ReportViolation, StackValidationArgs, validateResourceOfType } from "@pulumi/policy";
+import { pathToFileURL } from "url";
 const awaitSpawn = require("await-spawn");
 const fs = require("fs");
 
+interface SnykPolicyConfig {
+    dockerfileScanning: boolean,
+    excludeBaseImageVulns: boolean,
+    failOn: string,
+    severityThreshold: string,
+}
+
+const validateStack = async (args: StackValidationArgs, reportViolation: ReportViolation) => {
+    const config = args.getConfig<SnykPolicyConfig>();
+
+    // TODO: Remove this if we can get Dockerfile scanning to work:
+    config.dockerfileScanning = false;
+
+    const dockerImages = args.resources.filter(x => x.type === "docker:index/image:Image");
+    for (const image of dockerImages) {
+        await validateStackImage(config, image, reportViolation);
+    }
+};
+
+const validateStackImage = async (config: SnykPolicyConfig, image: PolicyResource, reportViolation: ReportViolation) => {
+    const dockerFileAbsPath = `${image.props.context}/${image.props.dockerfile}`;
+
+    if (config.dockerfileScanning && !fs.existsSync(dockerFileAbsPath)) {
+        const msg = `dockerfileScanning is set to 'true', but the Dockerfile at path '${dockerFileAbsPath}' could not be found. Either reconfigure the policy to turn off Dockerfile scanning, or set the value of docker.Image.snyk.dockerfileAbsPath resource to the absolute path of the Dockerfile in a resource transform.`;
+        reportViolation(msg);
+        return;
+    }
+
+    const commandArgs = [
+        "container",
+        "test",
+        image.props["imageName"],
+    ];
+
+    // const platform = image.props["build"]?.["platform"] as string ?? "";
+    // if (platform) {
+    //     console.log(`platform = '${platform}'`);
+    //     commandArgs.push(`--platform=${platform}`);
+    // }
+
+    if (config.dockerfileScanning) {
+        commandArgs.push(`--file=${dockerFileAbsPath}`);
+    }
+
+    if (config.excludeBaseImageVulns) {
+        commandArgs.push("--exclude-base-image-vulns");
+    }
+
+    commandArgs.push(`--severity-threshold=${config.severityThreshold}`);
+
+    try {
+        console.log(`command = 'snyk ${commandArgs.join(' ')}'`);
+        await awaitSpawn("snyk", commandArgs);
+    } catch (e) {
+        let errorMessage = `Snyk validation failed.`;
+
+        if (e.stdout && e.stdout.toString()) {
+            errorMessage += "\n\nstdout:\n";
+            errorMessage += e.stdout.toString();
+        }
+
+        if (e.stderr && e.stderr.toString()) {
+            errorMessage += "\n\nstderr:\n";
+            errorMessage += e.stderr.toString();
+        }
+
+        reportViolation(errorMessage);
+    }
+};
+
+const validateResource = validateResourceOfType(docker.Image, async (image, args, reportViolation) => {
+    const config = args.getConfig<{
+        dockerfileScanning: boolean,
+        excludeBaseImageVulns: boolean,
+        failOn: string,
+        severityThreshold: string,
+    }>();
+
+    // TODO: Remove this if we can get Dockerfile scanning to work:
+    config.dockerfileScanning = false;
+
+    // const child = await awaitSpawn('docker', ['image', 'ls']);
+    // console.log(`child = ${child}`);
+    // console.log(child.stdout.toString());
+
+    // console.log(`id = ${args.props["id"]}`);
+    // console.log(`repoDigest = ${args.props["repoDigest"]}`);
+    // // console.log(`config = ${JSON.stringify(config, null, 2)}`);
+
+    const dockerFileAbsPath = args.props?.snyk?.dockerfileAbsPath ?? "";
+
+    if (config.dockerfileScanning && !fs.existsSync(dockerFileAbsPath)) {
+        const msg = `dockerfileScanning is set to 'true', but the Dockerfile at path '${dockerFileAbsPath}' could not be found. Either reconfigure the policy to turn off Dockerfile scanning, or set the value of docker.Image.snyk.dockerfileAbsPath resource to the absolute path of the Dockerfile in a resource transform.`;
+        reportViolation(msg);
+    }
+
+    const commandArgs = [
+        "container",
+        "test",
+        image.imageName,
+    ];
+
+    const platform = args.props["build"]?.["platform"] as string ?? "";
+    if (platform) {
+        commandArgs.push(`--platform=${platform}`);
+    }
+
+    if (config.dockerfileScanning) {
+        commandArgs.push(`--file=${dockerFileAbsPath}`);
+    }
+
+    if (config.excludeBaseImageVulns) {
+        commandArgs.push("--exclude-base-image-vulns");
+    }
+
+    commandArgs.push(`--severity-threshold=${config.severityThreshold}`);
+
+    try {
+        await awaitSpawn("snyk", commandArgs, process.env);
+    } catch (e) {
+        let errorMessage = `Snyk validation failed.`;
+
+        if (e.stdout && e.stdout.toString()) {
+            errorMessage += "\n\nstdout:\n";
+            errorMessage += e.stdout.toString();
+        }
+
+        if (e.stderr && e.stderr.toString()) {
+            errorMessage += "\n\nstderr:\n";
+            errorMessage += e.stderr.toString();
+        }
+
+        reportViolation(errorMessage);
+    }
+});
+
+const debugStack = async (args: StackValidationArgs, reportViolation: ReportViolation) => {
+    console.log("debugStack");
+
+    const dockerImages = args.resources.filter(x => x.type === "docker:index/image:Image");
+    for (const image of dockerImages) {
+        console.log(`image = ${JSON.stringify(image, null, 2)}`);
+    }
+};
+
+const debugResource = validateResourceOfType(docker.Image, async (image, args, reportViolation) => {
+    console.log("debugResource");
+    console.log(`image = ${JSON.stringify(image, null, 2)}`);
+    console.log(`args = ${JSON.stringify(args, null, 2)}`);
+});
 
 new PolicyPack("demo-snyk", {
     policies: [{
+        // Stack validation policy: This is what we are trying to get to work
+        // under the current constraints:
+        name: "snyk-container-scan",
         configSchema: {
             properties: {
                 // TODO: log level (console and pass to Snyk)
@@ -28,77 +182,52 @@ new PolicyPack("demo-snyk", {
             },
         },
         enforcementLevel: "mandatory",
-        name: "snyk-container-scan",
         description: "Scans Docker Images with Snyk",
-        validateResource: validateResourceOfType(docker.Image, async (image, args, reportViolation) => {
-            const config = args.getConfig<{
-                dockerfileScanning: boolean,
-                excludeBaseImageVulns: boolean,
-                failOn: string,
-                severityThreshold: string,
-            }>();
-
-            const child = await awaitSpawn('docker', ['image', 'ls']);
-            console.log(`child = ${child}`);
-            // console.log(child.stdout.toString());
-
-            // console.log(`id = ${args.props["id"]}`);
-            // console.log(`repoDigest = ${args.props["repoDigest"]}`);
-            // // console.log(`config = ${JSON.stringify(config, null, 2)}`);
-
-            // const dockerFileAbsPath = args.props?.snyk?.dockerfileAbsPath ?? "";
-
-            // if (config.dockerfileScanning && !fs.existsSync(dockerFileAbsPath)) {
-            //     const msg = `dockerfileScanning is set to 'true', but the Dockerfile at path '${dockerFileAbsPath}' could not be found. Either reconfigure the policy to turn off Dockerfile scanning, or set the value of docker.Image.snyk.dockerfileAbsPath resource to the absolute path of the Dockerfile in a resource transform.`;
-            //     reportViolation(msg);
-            // }
-
-            // const commandArgs = [
-            //     "container",
-            //     "test",
-            //     image.imageName,
-            // ];
-
-            // const platform = args.props["build"]?.["platform"] as string ?? "";
-            // if (platform) {
-            //     commandArgs.push(`--platform=${platform}`);
-            // }
-
-            // if (config.dockerfileScanning) {
-            //     commandArgs.push(`--file=${dockerFileAbsPath}`);
-            // }
-
-            // if (config.excludeBaseImageVulns) {
-            //     commandArgs.push("--exclude-base-image-vulns");
-            // }
-
-            // commandArgs.push(`--severity-threshold=${config.severityThreshold}`);
-
-            // const options = {
-            //     env: {
-            //         // TODO: Figure out how to get Snyk to use the correct default socket.
-            //         DOCKER_HOST: "unix:///Users/jkodroff/.docker/run/docker.sock",
-            //         ...process.env
-            //     }
-            // };
-
-            // try {
-            //     await awaitSpawn("snyk", commandArgs, options);
-            // } catch (e) {
-            //     let errorMessage = `Snyk validation failed.`;
-
-            //     if (e.stdout && e.stdout.toString()) {
-            //         errorMessage += "\n\nstdout:\n";
-            //         errorMessage += e.stdout.toString();
-            //     }
-
-            //     if (e.stderr && e.stderr.toString()) {
-            //         errorMessage += "\n\nstderr:\n";
-            //         errorMessage += e.stderr.toString();
-            //     }
-
-            //     reportViolation(errorMessage);
-            // }
-        }),
+        validateStack: validateStack,
+    },
+    {
+        // This is the resource version of the policy. It does not work because
+        // the image has not yet been build when the policy fires (despite
+        // buildOnPreview being true). Keeping it around in case the underlying
+        // implementation of policy changes so that create() fires before
+        // resource policies do. Because the policy does not work at the time of
+        // writing, we keep it disabled:
+        name: "snyk-container-scan-resource",
+        description: "Scans Docker Images with Snyk using a resource policy",
+        enforcementLevel: "disabled",
+        configSchema: {
+            properties: {
+                // TODO: log level (console and pass to Snyk)
+                "dockerfileScanning": {
+                    default: true,
+                    type: "boolean",
+                },
+                "excludeBaseImageVulns": {
+                    default: false,
+                    type: "boolean"
+                },
+                "failOn": {
+                    default: "all",
+                    enum: ["all", "upgradable"]
+                },
+                "severityThreshold": {
+                    default: "critical",
+                    enum: ["low", "medium", "high", "critical"]
+                },
+            },
+        },
+        validateResource: validateResource,
+    },
+    {
+        name: "Debug resource",
+        description: "Logs the properties present in a docker.Image in a resource validation policy",
+        enforcementLevel: "disabled",
+        validateResource: debugResource,
+    },
+    {
+        name: "Debug stack",
+        enforcementLevel: "disabled",
+        description: "Logs the properties present in a docker.Image in a stack validation policy",
+        validateStack: debugStack,
     }],
 });

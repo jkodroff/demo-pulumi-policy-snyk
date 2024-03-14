@@ -12,7 +12,16 @@ cd infra
 pulumi preview --policy-pack ../policy
 ```
 
-Possible future improvements:
+## Snyk Unable to find Docker Socket
 
-- Need to figure out how to pass through the Dockerfile for additional suggestions on remediation. This may require enhancements in the Pulumi policy engine.
-- Add a configuration schema to add more options that can in turn be passed to the Snyk CLI.
+If the Snyk CLI gives you an error similar to the following:
+
+```text
+connect ENOENT /var/run/docker.sock
+```
+
+You may need to set the `DOCKER_HOST` environment variable. Snyk assumed that the Docker socket is running in the older (privileged) location. The newer version of Docker use a socket placed in the current user's home directory, e.g.:
+
+```bash
+export DOCKER_HOST=unix:///Users/jkodroff/.docker/run/docker.sock
+```

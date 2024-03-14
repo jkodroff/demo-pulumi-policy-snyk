@@ -1,5 +1,8 @@
 {
   "snyk-container-scan": {
     "dockerfileScanning": true
+  },
+  "debug-stack": {
+    "enforcementLevel": "mandatory"
   }
 }
