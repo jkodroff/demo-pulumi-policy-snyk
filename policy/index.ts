@@ -8,14 +8,16 @@ interface SnykPolicyConfig {
     dockerfileScanning: boolean,
     excludeBaseImageVulns: boolean,
     failOn: string,
+    pulumiProgramAbsPath: string,
     severityThreshold: string,
 }
 
 const validateStack = async (args: StackValidationArgs, reportViolation: ReportViolation) => {
     const config = args.getConfig<SnykPolicyConfig>();
 
-    // TODO: Remove this if we can get Dockerfile scanning to work:
-    config.dockerfileScanning = false;
+    if (config.dockerfileScanning && !config.pulumiProgramAbsPath) {
+        throw new Error("If `dockerfileScanning` is configured to be `true`, `pulumiProgramAbsPath` must be set to the absolute path of the Pulumi program this policy is evaluating.");
+    }
 
     const dockerImages = args.resources.filter(x => x.type === "docker:index/image:Image");
     for (const image of dockerImages) {
@@ -24,13 +26,6 @@ const validateStack = async (args: StackValidationArgs, reportViolation: ReportV
 };
 
 const validateStackImage = async (config: SnykPolicyConfig, image: PolicyResource, reportViolation: ReportViolation) => {
-    const dockerFileAbsPath = `${image.props.context}/${image.props.dockerfile}`;
-
-    if (config.dockerfileScanning && !fs.existsSync(dockerFileAbsPath)) {
-        const msg = `dockerfileScanning is set to 'true', but the Dockerfile at path '${dockerFileAbsPath}' could not be found. Either reconfigure the policy to turn off Dockerfile scanning, or set the value of docker.Image.snyk.dockerfileAbsPath resource to the absolute path of the Dockerfile in a resource transform.`;
-        reportViolation(msg);
-        return;
-    }
 
     const commandArgs = [
         "container",
@@ -38,14 +33,16 @@ const validateStackImage = async (config: SnykPolicyConfig, image: PolicyResourc
         image.props["imageName"],
     ];
 
-    // const platform = image.props["build"]?.["platform"] as string ?? "";
-    // if (platform) {
-    //     console.log(`platform = '${platform}'`);
-    //     commandArgs.push(`--platform=${platform}`);
-    // }
-
     if (config.dockerfileScanning) {
-        commandArgs.push(`--file=${dockerFileAbsPath}`);
+        const dockerfileAbsPath = `${config.pulumiProgramAbsPath}/${image.props.dockerfile}`;
+
+        if (!fs.existsSync(dockerfileAbsPath)) {
+            const msg = `dockerfileScanning is set to 'true', but the Dockerfile at path '${dockerfileAbsPath}' could not be found. Either reconfigure the policy to turn off Dockerfile scanning, or set the value of docker.Image.snyk.dockerfileAbsPath resource to the absolute path of the Dockerfile in a resource transform.`;
+            reportViolation(msg);
+            return;
+        }
+
+        commandArgs.push(`--file=${dockerfileAbsPath}`);
     }
 
     if (config.excludeBaseImageVulns) {
@@ -84,14 +81,6 @@ const validateResource = validateResourceOfType(docker.Image, async (image, args
 
     // TODO: Remove this if we can get Dockerfile scanning to work:
     config.dockerfileScanning = false;
-
-    // const child = await awaitSpawn('docker', ['image', 'ls']);
-    // console.log(`child = ${child}`);
-    // console.log(child.stdout.toString());
-
-    // console.log(`id = ${args.props["id"]}`);
-    // console.log(`repoDigest = ${args.props["repoDigest"]}`);
-    // // console.log(`config = ${JSON.stringify(config, null, 2)}`);
 
     const dockerFileAbsPath = args.props?.snyk?.dockerfileAbsPath ?? "";
 
@@ -175,6 +164,9 @@ new PolicyPack("demo-snyk", {
                     default: "all",
                     enum: ["all", "upgradable"]
                 },
+                "pulumiProgramAbsPath": {
+                    type: "string"
+                },
                 "severityThreshold": {
                     default: "critical",
                     enum: ["low", "medium", "high", "critical"]
@@ -219,13 +211,13 @@ new PolicyPack("demo-snyk", {
         validateResource: validateResource,
     },
     {
-        name: "Debug resource",
+        name: "debug-resource",
         description: "Logs the properties present in a docker.Image in a resource validation policy",
         enforcementLevel: "disabled",
         validateResource: debugResource,
     },
     {
-        name: "Debug stack",
+        name: "debug-stack",
         enforcementLevel: "disabled",
         description: "Logs the properties present in a docker.Image in a stack validation policy",
         validateStack: debugStack,

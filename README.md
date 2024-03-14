@@ -12,6 +12,12 @@ cd infra
 pulumi preview --policy-pack ../policy
 ```
 
+## Enabling Dockerfile Scanning
+
+```bash
+./add-dockerfile-scanning.sh
+```
+
 ## Snyk Unable to find Docker Socket
 
 If the Snyk CLI gives you an error similar to the following:

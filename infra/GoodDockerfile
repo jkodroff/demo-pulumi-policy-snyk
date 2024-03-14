@@ -1,1 +1,1 @@
-FROM --platform=linux/arm64 alpine:latest
+FROM --platform=linux/amd64 alpine:latest
