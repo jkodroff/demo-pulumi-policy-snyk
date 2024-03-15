@@ -1,5 +1,10 @@
 {
   "snyk-container-scan": {
-    "dockerfileScanning": true
+    "enforcementLevel": "disabled",
+    "dockerfileScanning": false,
+    "pulumiProgramAbsPath": "/Users/jkodroff/src/jkodroff/demo-pulumi-policy-snyk/infra"
+  },
+  "debug-stack": {
+    "enforcementLevel": "mandatory"
   }
 }

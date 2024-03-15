@@ -12,7 +12,26 @@ cd infra
 pulumi preview --policy-pack ../policy
 ```
 
-Possible future improvements:
+## Enabling Dockerfile Scanning
 
-- Need to figure out how to pass through the Dockerfile for additional suggestions on remediation. This may require enhancements in the Pulumi policy engine.
-- Add a configuration schema to add more options that can in turn be passed to the Snyk CLI.
+Snyk can scan Dockerfiles for vulnerabilities. Because there's no direct relationship between the location on disk of a Pulumi program and any policy packs that might be running, we need to configure the Snyk policy to know where the Pulumi program is running.
+
+```bash
+./add-dockerfile-scanning.sh
+```
+
+Because Dockerfile scanning requires the absolute path to the Pulumi program to be supplied via policy configuration, server-side policy enforcement requires that the Pulumi program be run from a known location on disk (i.e. whatever the path on disk is that the policy is configured with in the Pulumi Cloud console) if Dockerfile scanning is desired. If <https://github.com/pulumi/pulumi-policy/issues/333> is implemented, this restriction can be lifted and the configuration value can be removed.
+
+## Snyk Unable to find Docker Socket
+
+If the Snyk CLI gives you an error similar to the following:
+
+```text
+connect ENOENT /var/run/docker.sock
+```
+
+You may need to set the `DOCKER_HOST` environment variable. Snyk assumed that the Docker socket is running in the older (privileged) location. The newer version of Docker use a socket placed in the current user's home directory, e.g.:
+
+```bash
+export DOCKER_HOST=unix:///Users/jkodroff/.docker/run/docker.sock
+```
