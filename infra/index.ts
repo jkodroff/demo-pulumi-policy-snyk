@@ -6,11 +6,6 @@ const resolve = require('path').resolve;
 // are adding an arbitrary property that easily be ignored if it were to cause a
 // diff:
 const addDockerfileAbsPath = (args: any) => {
-  // TODO: Could we move this function to an export in the Policy Pack if we
-  // were to publish it as an npm package like compliance ready policies?
-  // That way, we could do:
-  // transformations: [snykPolicy.addDockerfilePath]
-
   if (args.props["build"]?.dockerfile === undefined) {
     // There's no path to a Dockerfile, so there's nothing to verify
     return args;

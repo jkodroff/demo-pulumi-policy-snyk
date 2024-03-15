@@ -14,9 +14,13 @@ pulumi preview --policy-pack ../policy
 
 ## Enabling Dockerfile Scanning
 
+Snyk can scan Dockerfiles for vulnerabilities. Because there's no direct relationship between the location on disk of a Pulumi program and any policy packs that might be running, we need to configure the Snyk policy to know where the Pulumi program is running.
+
 ```bash
 ./add-dockerfile-scanning.sh
 ```
+
+Because Dockerfile scanning requires the absolute path to the Pulumi program to be supplied via policy configuration, server-side policy enforcement requires that the Pulumi program be run from a known location on disk (i.e. whatever the path on disk is that the policy is configured with in the Pulumi Cloud console) if Dockerfile scanning is desired. If <https://github.com/pulumi/pulumi-policy/issues/333> is implemented, this restriction can be lifted and the configuration value can be removed.
 
 ## Snyk Unable to find Docker Socket
 
