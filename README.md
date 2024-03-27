@@ -30,7 +30,7 @@ If the Snyk CLI gives you an error similar to the following:
 connect ENOENT /var/run/docker.sock
 ```
 
-You may need to set the `DOCKER_HOST` environment variable. Snyk assumed that the Docker socket is running in the older (privileged) location. The newer version of Docker use a socket placed in the current user's home directory, e.g.:
+You may need to set the `DOCKER_HOST` environment variable. At the time of writing, the Snyk CLI appears to assume that the Docker socket is running in the older (privileged) location. The newer version of Docker use a socket placed in the current user's home directory, e.g.:
 
 ```bash
 export DOCKER_HOST=unix:///Users/jkodroff/.docker/run/docker.sock

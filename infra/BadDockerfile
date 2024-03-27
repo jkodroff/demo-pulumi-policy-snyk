@@ -1,2 +1,0 @@
-# This image has critical issues:
-FROM debian:latest

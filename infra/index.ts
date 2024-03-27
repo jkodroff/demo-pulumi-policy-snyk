@@ -40,27 +40,23 @@ const resolveBuildContext = (args: any) => {
   return args;
 };
 
-new docker.Image("good-image", {
-  imageName: "docker.io/joshkodroff/snyk-policy-good-image",
+new docker.Image("alpine", {
+  imageName: "docker.io/joshkodroff/snyk-policy-alpine",
   buildOnPreview: true,
   build: {
-    dockerfile: "GoodDockerfile",
+    dockerfile: "AlpineDockerfile",
     platform: "linux/amd64",
   },
   skipPush: true,
-  // }, {
-  //   transformations: [resolveBuildContext]
 });
 
-new docker.Image("bad-image", {
-  imageName: "docker.io/joshkodroff/snyk-policy-bad-image",
+new docker.Image("debian", {
+  imageName: "docker.io/joshkodroff/snyk-policy-debian",
   buildOnPreview: true,
   build: {
-    dockerfile: "BadDockerfile",
+    dockerfile: "DebianDockerfile",
     platform: "linux/amd64",
   },
   skipPush: true,
-  // }, {
-  //   transformations: [addDockerfileAbsPath]
 });
 

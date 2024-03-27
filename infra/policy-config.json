@@ -5,6 +5,6 @@
     "pulumiProgramAbsPath": "/Users/jkodroff/src/jkodroff/demo-pulumi-policy-snyk/infra"
   },
   "debug-stack": {
-    "enforcementLevel": "mandatory"
+    "enforcementLevel": "advisory"
   }
 }
